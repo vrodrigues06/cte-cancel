@@ -21,13 +21,11 @@ export default function SpreadsheetUploader() {
     setFileName(file.name);
     const ext = file.name.split(".").pop()?.toLowerCase();
     try {
-      let rows: PreviewRow[] = [];
+      let rows: Record<string, unknown>[] = [];
       if (ext === "csv") {
         const text = await file.text();
         const parsed = Papa.parse(text, { header: true });
-        rows = (parsed.data as Record<string, unknown>[])
-          .slice(0, 5)
-          .map(normalizeRow);
+        rows = parsed.data as Record<string, unknown>[];
       } else if (ext === "xlsx" || ext === "xls") {
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, { type: "array" });
@@ -37,14 +35,12 @@ export default function SpreadsheetUploader() {
           return;
         }
         const sheet = wb.Sheets[firstSheetName]!;
-        rows = (XLSX.utils.sheet_to_json(sheet)! as Record<string, unknown>[])
-          .slice(0, 5)
-          .map(normalizeRow);
+        rows = XLSX.utils.sheet_to_json(sheet)! as Record<string, unknown>[];
       } else {
         alert("Formato não suportado. Use .xlsx, .xls ou .csv");
         return;
       }
-      const keys = rows[0] ? Object.keys(rows[0]) : [];
+      const keys = rows[0] ? Object.keys(rows[0]!) : [];
       const norm = (s: string) =>
         s
           .normalize("NFD")
@@ -69,7 +65,40 @@ export default function SpreadsheetUploader() {
         alert("Colunas obrigatórias ausentes: numeroAutorizacao e externalId");
         return;
       }
-      setPreview(rows);
+      function pick(r: Record<string, unknown>) {
+        let n: string | number | null = null;
+        let e: string | number | null = null;
+        for (const [k, v] of Object.entries(r)) {
+          const nk = norm(k);
+          if (
+            nk === "numeroautorizacao" ||
+            nk === "numerodaautorizacao" ||
+            nk === "numautorizacao" ||
+            nk === "numero_autorizacao" ||
+            nk === "ordemautorizacao"
+          ) {
+            n =
+              typeof v === "string" || typeof v === "number"
+                ? v
+                : String(v ?? "");
+          }
+          if (
+            nk === "externalid" ||
+            nk === "idexterno" ||
+            nk === "externoid" ||
+            nk === "external_id" ||
+            nk === "id"
+          ) {
+            e =
+              typeof v === "string" || typeof v === "number"
+                ? v
+                : String(v ?? "");
+          }
+        }
+        return { "Ordem autorização": n ?? "", ID: e ?? "" } as PreviewRow;
+      }
+      const display = rows.slice(0, 5).map(pick);
+      setPreview(display);
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Erro ao processar arquivo";
@@ -161,21 +190,21 @@ export default function SpreadsheetUploader() {
           <table className="mt-1 min-w-[300px] text-xs">
             <thead>
               <tr>
-                {Object.keys(preview[0]!).map((k) => (
-                  <th key={k} className="border px-2 py-1 text-left">
-                    {k}
-                  </th>
-                ))}
+                <th className="border px-2 py-1 text-left">
+                  Ordem autorização
+                </th>
+                <th className="border px-2 py-1 text-left">ID</th>
               </tr>
             </thead>
             <tbody>
               {preview.map((row, i) => (
                 <tr key={i}>
-                  {Object.values(row).map((v, j) => (
-                    <td key={j} className="border px-2 py-1">
-                      {String(v ?? "")}
-                    </td>
-                  ))}
+                  <td className="border px-2 py-1">
+                    {String(row["Ordem autorização"] ?? "")}
+                  </td>
+                  <td className="border px-2 py-1">
+                    {String(row["ID"] ?? "")}
+                  </td>
                 </tr>
               ))}
             </tbody>
