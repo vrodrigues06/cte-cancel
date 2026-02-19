@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { ctesRoutes } from "./routes/ctes";
+import { getLogs } from "./logs";
 
 const app = Fastify({
   logger: true,
@@ -21,6 +22,9 @@ await app.register(multipart, {
 
 await app.register(ctesRoutes, { prefix: "/api/ctes" });
 
+app.get("/logs", async () => {
+  return { logs: getLogs() };
+});
 const port = Number(process.env["PORT"] ?? 3001);
 try {
   await app.listen({ port, host: "0.0.0.0" });

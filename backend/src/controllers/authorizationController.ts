@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { SapService } from "../services/SapService";
 import { z } from "zod";
+import { appendLog } from "../logs";
 
 const prisma = new PrismaClient();
 const sapService = new SapService();
@@ -97,21 +98,100 @@ export async function importSpreadsheet(
   } else if (ext === "xlsx" || ext === "xls") {
     const wb = XLSX.read(buf, { type: "buffer" });
     const firstSheetName: string | undefined = wb.SheetNames[0];
-
     if (!firstSheetName) {
       return reply.code(400).send({ error: "Planilha vazia" });
     }
-
     const sheet = wb.Sheets[firstSheetName];
-
     if (!sheet) {
       return reply.code(400).send({ error: "Aba da planilha não encontrada" });
     }
-
-    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: "",
+    const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
       raw: false,
     });
+    if (raw.length < 2) {
+      return reply.code(400).send({ error: "Planilha sem linhas de dados" });
+    }
+    const header = raw[0] as unknown[];
+    const dataRows = raw.slice(1) as unknown[][];
+    function norm(value: string): string {
+      return value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+    }
+    const headerNorms = header.map((h) =>
+      typeof h === "string" ? norm(h) : "",
+    );
+    const idxNum = headerNorms.findIndex(
+      (v) => v === "ordemautorizacao" || v === "numeroautorizacao",
+    );
+    const idxExt = headerNorms.findIndex(
+      (v) => v === "id" || v === "externalid",
+    );
+    appendLog("import.resolve_indices", {
+      header,
+      headerNorms,
+      idxNum,
+      idxExt,
+    });
+    if (idxNum === -1 || idxExt === -1) {
+      return reply.code(400).send({
+        error: "Colunas obrigatórias não encontradas",
+        hint: header,
+      });
+    }
+    const normalizedRows = dataRows.map((arr) => {
+      const ordemAutorizacao = String(arr[idxNum] ?? "").trim();
+      const id = String(arr[idxExt] ?? "").trim();
+      return { ordemAutorizacao, id };
+    });
+    appendLog("import.sample_rows", { sample: normalizedRows.slice(0, 5) });
+    const Stringish = z
+      .string()
+      .transform((s) => s.trim())
+      .refine((s) => s.length > 0, { message: "vazio" });
+    const RowSchema = z.object({
+      ordemAutorizacao: Stringish,
+      id: Stringish,
+    });
+    const data = normalizedRows.flatMap((row, index) => {
+      const parsed = RowSchema.safeParse(row);
+      if (!parsed.success) {
+        appendLog("import.row_invalid", { index, row });
+        return [];
+      }
+      const value = parsed.data;
+      return [
+        {
+          numeroAutorizacao: value.ordemAutorizacao,
+          externalId: value.id,
+          xml: null,
+          xmlEvent: null,
+          status: "PENDENTE" as const,
+        },
+      ];
+    });
+    appendLog("import.summary", {
+      totalRows: normalizedRows.length,
+      valid: data.length,
+    });
+    if (data.length === 0) {
+      return reply.code(400).send({
+        error: "Nenhuma linha válida encontrada",
+      });
+    }
+    try {
+      const created = await prisma.cteCancel.createMany({
+        data,
+        skipDuplicates: true,
+      });
+      return reply.send({ imported: created.count, persisted: true });
+    } catch (error) {
+      req.log.error(error);
+      return reply.send({ imported: data.length, persisted: false });
+    }
   } else {
     return reply.code(400).send({
       error: `Formato não suportado (${ext}). Use .xlsx, .xls ou .csv`,
@@ -152,6 +232,8 @@ export async function importSpreadsheet(
   const extKey: string | null =
     firstKeys.find((k) => aliasExt.includes(norm(k))) ?? null;
 
+  appendLog("import.resolve_keys", { numKey, extKey, firstKeys });
+
   if (!numKey || !extKey) {
     return reply.code(400).send({
       error: "Colunas obrigatórias não encontradas",
@@ -160,12 +242,23 @@ export async function importSpreadsheet(
   }
 
   const normalizedRows: {
-    ordemAutorizacao: unknown;
-    id: unknown;
-  }[] = rows.map((row) => ({
-    ordemAutorizacao: row[numKey],
-    id: row[extKey],
-  }));
+    ordemAutorizacao: string;
+    id: string;
+  }[] = rows.map((row) => {
+    const n = row[numKey];
+    const i = row[extKey];
+    const ordemAutorizacao =
+      typeof n === "string" || typeof n === "number" || typeof n === "boolean"
+        ? String(n).trim()
+        : "";
+    const id =
+      typeof i === "string" || typeof i === "number" || typeof i === "boolean"
+        ? String(i).trim()
+        : "";
+    return { ordemAutorizacao, id };
+  });
+
+  appendLog("import.sample_rows", { sample: normalizedRows.slice(0, 5) });
 
   const Stringish = z
     .union([z.string(), z.number(), z.boolean()])
@@ -181,9 +274,7 @@ export async function importSpreadsheet(
     const parsed = RowSchema.safeParse(row);
 
     if (!parsed.success) {
-      if (index < 10) {
-        req.log.info({ index, row }, "importSpreadsheet: linha inválida");
-      }
+      appendLog("import.row_invalid", { index, row });
       return [];
     }
 
@@ -199,6 +290,8 @@ export async function importSpreadsheet(
       },
     ];
   });
+
+  appendLog("import.summary", { totalRows: rows.length, valid: data.length });
 
   if (data.length === 0) {
     return reply.code(400).send({

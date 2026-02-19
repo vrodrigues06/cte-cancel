@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import * as controller from "../controllers/cteController";
+import * as controller from "../controllers/authorizationController";
 
 export async function ctesRoutes(app: FastifyInstance) {
   app.get("/", controller.list);
