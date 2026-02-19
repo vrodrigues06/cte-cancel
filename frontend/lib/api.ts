@@ -1,4 +1,4 @@
-export type Authorization = {
+export type Cte = {
   id: string;
   numeroAutorizacao: string;
   externalId: string;
@@ -12,7 +12,7 @@ export type Authorization = {
 };
 
 export type ListResponse = {
-  items: Authorization[];
+  items: Cte[];
   total: number;
   skip: number;
   take: number;
@@ -26,7 +26,7 @@ export async function fetchStats(): Promise<{
   enviados: number;
   erros: number;
 }> {
-  const res = await fetch(`${BASE_URL}/api/authorizations/stats`, {
+  const res = await fetch(`${BASE_URL}/api/ctes/stats`, {
     cache: "no-store",
   });
   if (!res.ok) {
@@ -35,7 +35,7 @@ export async function fetchStats(): Promise<{
   return res.json();
 }
 
-export async function fetchAuthorizations(params: {
+export async function fetchCtes(params: {
   q?: string;
   status?: string;
   offset?: number;
@@ -46,11 +46,11 @@ export async function fetchAuthorizations(params: {
   if (params.status) qs.set("status", params.status);
   qs.set("offset", String(params.offset ?? 0));
   qs.set("limit", String(params.limit ?? 50));
-  const res = await fetch(`${BASE_URL}/api/authorizations?${qs.toString()}`, {
+  const res = await fetch(`${BASE_URL}/api/ctes?${qs.toString()}`, {
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error("Falha ao buscar autorizações");
+    throw new Error("Falha ao buscar CT-e");
   }
   return res.json();
 }

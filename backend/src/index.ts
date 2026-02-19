@@ -2,7 +2,7 @@ import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
-import { authorizationsRoutes } from "./routes/authorizations";
+import { ctesRoutes } from "./routes/ctes";
 
 const app = Fastify({
   logger: true,
@@ -19,7 +19,7 @@ await app.register(multipart, {
   },
 });
 
-await app.register(authorizationsRoutes, { prefix: "/api/authorizations" });
+await app.register(ctesRoutes, { prefix: "/api/ctes" });
 
 const port = Number(process.env["PORT"] ?? 3001);
 try {

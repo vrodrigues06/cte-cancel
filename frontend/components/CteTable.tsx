@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import type { Authorization, ListResponse } from "../lib/api";
+import type { Cte, ListResponse } from "../lib/api";
 import {
   ColumnDef,
   getCoreRowModel,
@@ -12,11 +12,11 @@ import XmlUploader from "./XmlUploader";
 const BASE_URL =
   process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
 
-export default function AuthorizationTable({ data }: { data: ListResponse }) {
-  const [items, setItems] = useState<Authorization[]>(data.items);
-  const columns = useMemo<ColumnDef<Authorization>[]>(
+export default function CteTable({ data }: { data: ListResponse }) {
+  const [items, setItems] = useState<Cte[]>(data.items);
+  const columns = useMemo<ColumnDef<Cte>[]>(
     () => [
-      { header: "Número de Autorização", accessorKey: "numeroAutorizacao" },
+      { header: "Número de CT-e", accessorKey: "numeroAutorizacao" },
       { header: "ID Externo", accessorKey: "externalId" },
       {
         header: "Status",
@@ -35,11 +35,11 @@ export default function AuthorizationTable({ data }: { data: ListResponse }) {
       {
         header: "Ações",
         cell: ({ row }) => {
-          const auth = row.original;
-          const disabled = !auth.xml || auth.status !== "PENDENTE";
+          const cte = row.original;
+          const disabled = !cte.xml || cte.status !== "PENDENTE";
           return (
             <div className="flex items-center gap-2">
-              <XmlUploader id={auth.id} onUploaded={refresh} />
+              <XmlUploader id={cte.id} onUploaded={refresh} />
               <button
                 className="rounded-md bg-primary px-2 py-1 text-sm text-white disabled:opacity-50"
                 disabled={disabled}
@@ -48,7 +48,7 @@ export default function AuthorizationTable({ data }: { data: ListResponse }) {
                     ? "Importe o XML e status deve estar PENDENTE"
                     : "Enviar para SAP"
                 }
-                onClick={() => sendToSap(auth.id)}
+                onClick={() => sendToSap(cte.id)}
               >
                 Enviar SAP
               </button>
@@ -68,7 +68,7 @@ export default function AuthorizationTable({ data }: { data: ListResponse }) {
 
   async function refresh() {
     const res = await fetch(
-      `${BASE_URL}/api/authorizations?offset=${data.skip}&limit=${data.take}`,
+      `${BASE_URL}/api/ctes?offset=${data.skip}&limit=${data.take}`,
       { cache: "no-store" },
     );
     if (res.ok) {
@@ -78,10 +78,9 @@ export default function AuthorizationTable({ data }: { data: ListResponse }) {
   }
 
   async function sendToSap(id: string) {
-    const res = await fetch(
-      `${BASE_URL}/api/authorizations/${id}/send-to-sap`,
-      { method: "POST" },
-    );
+    const res = await fetch(`${BASE_URL}/api/ctes/${id}/send-to-sap`, {
+      method: "POST",
+    });
     if (!res.ok) {
       const txt = await res.text();
       alert(txt);
@@ -90,7 +89,7 @@ export default function AuthorizationTable({ data }: { data: ListResponse }) {
   }
 
   return (
-    <div className="rounded-lg border bg-white">
+    <div className="rounded-lg border bg-white shadow-sm">
       <table className="w-full">
         <thead className="bg-gray-50">
           {table.getHeaderGroups().map((hg) => (
@@ -130,7 +129,7 @@ export default function AuthorizationTable({ data }: { data: ListResponse }) {
   );
 }
 
-function StatusBadge({ status }: { status: Authorization["status"] }) {
+function StatusBadge({ status }: { status: Cte["status"] }) {
   const conf = {
     PENDENTE: { label: "PENDENTE", cls: "bg-warning text-white" },
     ENVIADO: { label: "ENVIADO", cls: "bg-success text-white" },

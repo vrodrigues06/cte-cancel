@@ -24,7 +24,7 @@ export default function XmlUploader({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`${BASE_URL}/api/authorizations/${id}/xml`, {
+      const res = await fetch(`${BASE_URL}/api/ctes/${id}/xml`, {
         method: "PATCH",
         body: fd,
       });
@@ -43,7 +43,7 @@ export default function XmlUploader({
   }
 
   return (
-    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 text-sm">
+    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 text-sm shadow-sm bg-white">
       <input
         type="file"
         accept=".xml"

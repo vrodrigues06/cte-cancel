@@ -78,6 +78,8 @@ export async function importSpreadsheet(
   const buf = await file.toBuffer();
 
   let rows: Array<Record<string, unknown>> = [];
+  let sheetRef: XLSX.WorkSheet | null = null;
+  let isExcel = false;
   if (ext === "csv") {
     const parsed = Papa.parse(buf.toString("utf-8"), { header: true });
     if (parsed.errors.length) {
@@ -97,23 +99,136 @@ export async function importSpreadsheet(
       return reply.code(400).send({ error: "Aba da planilha não encontrada" });
     }
     rows = XLSX.utils.sheet_to_json(sheet) as Array<Record<string, unknown>>;
+    sheetRef = sheet;
+    isExcel = true;
   } else {
-    return reply
-      .code(400)
-      .send({ error: "Formato não suportado. Use .xlsx, .xls ou .csv" });
+    return reply.code(400).send({
+      error: `Formato não suportado (${ext}). Use .xlsx, .xls ou .csv`,
+    });
   }
+
+  req.log.info(
+    { filename, ext, rows_count: rows.length },
+    "importSpreadsheet: file info",
+  );
+  req.log.info(
+    { first_row_keys: rows[0] ? Object.keys(rows[0]).slice(0, 20) : [] },
+    "importSpreadsheet: first row keys",
+  );
+
+  function norm(s: string) {
+    return s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  function remapRow(r: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...r };
+    for (const k of Object.keys(r)) {
+      const nk = norm(k);
+      if (
+        nk === "numeroautorizacao" ||
+        nk === "numerodaautorizacao" ||
+        nk === "numautorizacao" ||
+        nk === "numero_autorizacao"
+      ) {
+        out["numeroAutorizacao"] = r[k];
+      }
+      if (
+        nk === "externalid" ||
+        nk === "idexterno" ||
+        nk === "externoid" ||
+        nk === "external_id"
+      ) {
+        out["externalId"] = r[k];
+      }
+    }
+    return out;
+  }
+
+  rows = rows.map(remapRow);
+  req.log.info(
+    {
+      remapped_first_row_keys: rows[0] ? Object.keys(rows[0]).slice(0, 20) : [],
+    },
+    "importSpreadsheet: remapped first row keys",
+  );
+
+  const hasNeededKeys =
+    !!rows[0] && "numeroAutorizacao" in rows[0] && "externalId" in rows[0];
+
+  if (!hasNeededKeys && isExcel && sheetRef) {
+    const raw = XLSX.utils.sheet_to_json(sheetRef, { header: 1 }) as unknown[];
+    const header = (raw[0] ?? []) as unknown[];
+    const headerNorms = (header as unknown[]).map((h) =>
+      typeof h === "string" ? norm(h) : "",
+    );
+    const idxNum = headerNorms.findIndex(
+      (nk) =>
+        nk === "numeroautorizacao" ||
+        nk === "numerodaautorizacao" ||
+        nk === "numautorizacao" ||
+        nk === "numero_autorizacao",
+    );
+    const idxExt = headerNorms.findIndex(
+      (nk) =>
+        nk === "externalid" ||
+        nk === "idexterno" ||
+        nk === "externoid" ||
+        nk === "external_id",
+    );
+    req.log.info(
+      { header, headerNorms, idxNum, idxExt },
+      "importSpreadsheet: fallback header analysis",
+    );
+    if (idxNum >= 0 && idxExt >= 0) {
+      const dataRows = (raw.slice(1) as unknown[][]) ?? [];
+      rows = dataRows.map((arr) => {
+        const numeroAutorizacao = String(arr[idxNum] ?? "").trim();
+        const externalId = String(arr[idxExt] ?? "").trim();
+        const out: Record<string, unknown> = {};
+        if (numeroAutorizacao.length > 0)
+          out["numeroAutorizacao"] = numeroAutorizacao;
+        if (externalId.length > 0) out["externalId"] = externalId;
+        return out;
+      });
+      req.log.info(
+        { fallback_rows_count: rows.length },
+        "importSpreadsheet: applied fallback mapping",
+      );
+    }
+  }
+
+  const Stringish = z
+    .union([z.string(), z.number()])
+    .transform((v) => String(v).trim())
+    .refine((s) => s.length > 0, { message: "vazio" });
 
   const RowSchema = z
     .object({
-      numeroAutorizacao: z.string().min(1),
-      externalId: z.string().min(1),
+      numeroAutorizacao: Stringish,
+      externalId: Stringish,
     })
     .passthrough();
 
-  const data = rows.flatMap((r) => {
+  const data = rows.flatMap((r, i) => {
     const parsed = RowSchema.safeParse(r);
-    if (!parsed.success) return [];
+    if (!parsed.success) {
+      if (i < 10) {
+        req.log.info({ i, row: r }, "importSpreadsheet: row invalid");
+      }
+      return [];
+    }
     const v = parsed.data;
+    if (i < 10) {
+      req.log.info(
+        { i, numeroAutorizacao: v.numeroAutorizacao, externalId: v.externalId },
+        "importSpreadsheet: row valid",
+      );
+    }
     return [
       {
         numeroAutorizacao: v.numeroAutorizacao,
@@ -126,14 +241,22 @@ export async function importSpreadsheet(
   });
 
   if (!data.length) {
-    return reply.code(400).send({ error: "Nenhuma linha válida encontrada" });
+    return reply.code(400).send({
+      error: "Nenhuma linha válida encontrada",
+      hint: rows[0] ? Object.keys(rows[0]).slice(0, 20) : [],
+    });
   }
 
-  const created = await prisma.cteCancel.createMany({
-    data,
-    skipDuplicates: true,
-  });
-  return reply.send({ imported: created.count });
+  try {
+    const created = await prisma.cteCancel.createMany({
+      data,
+      skipDuplicates: true,
+    });
+    return reply.send({ imported: created.count, persisted: true });
+  } catch (e) {
+    req.log.error(e);
+    return reply.send({ imported: data.length, persisted: false });
+  }
 }
 
 export async function uploadXml(

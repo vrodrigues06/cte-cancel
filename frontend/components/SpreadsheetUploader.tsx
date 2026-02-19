@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
@@ -13,6 +14,7 @@ export default function SpreadsheetUploader() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
   const onDrop = async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
@@ -80,7 +82,7 @@ export default function SpreadsheetUploader() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`${BASE_URL}/api/authorizations/import`, {
+      const res = await fetch(`${BASE_URL}/api/ctes/import`, {
         method: "POST",
         body: fd,
       });
@@ -92,6 +94,7 @@ export default function SpreadsheetUploader() {
       alert(`Importados: ${json.imported}`);
       setPreview([]);
       setFileName(null);
+      router.refresh();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Erro no upload";
       alert(message);
@@ -104,7 +107,7 @@ export default function SpreadsheetUploader() {
     <div className="flex items-center gap-3">
       <div
         {...getRootProps()}
-        className={`cursor-pointer rounded-md border-2 border-dashed p-3 ${isDragActive ? "border-primary bg-blue-50" : "border-gray-300 bg-white"}`}
+        className={`cursor-pointer rounded-md border-2 border-dashed p-3 shadow-sm ${isDragActive ? "border-primary bg-blue-50" : "border-gray-300 bg-white"}`}
       >
         <input {...getInputProps()} />
         <span className="text-sm text-gray-700">
@@ -114,9 +117,19 @@ export default function SpreadsheetUploader() {
       <button
         onClick={handleUpload}
         disabled={!fileName || loading}
-        className="rounded-md bg-primary px-4 py-2 text-white disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-white shadow-sm disabled:opacity-50 hover:bg-primary/90 active:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition"
       >
-        {loading ? "Importando..." : "Enviar"}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+          className="opacity-90"
+        >
+          <path d="M12 3a1 1 0 0 1 1 1v7.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L11 11.586V4a1 1 0 0 1 1-1ZM5 19a1 1 0 1 0 0 2h14a1 1 0 1 0 0-2H5Z" />
+        </svg>
+        {loading ? "Importando..." : "Importar"}
       </button>
       {fileName && (
         <span className="text-sm text-gray-600">Selecionado: {fileName}</span>
