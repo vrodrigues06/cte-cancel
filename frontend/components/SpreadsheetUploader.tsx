@@ -49,20 +49,10 @@ export default function SpreadsheetUploader() {
           .toLowerCase()
           .replace(/[^a-z0-9]/g, "");
       const keysNorm = keys.map(norm);
-      const hasNumero =
-        keysNorm.includes("numeroautorizacao") ||
-        keysNorm.includes("numerodaautorizacao") ||
-        keysNorm.includes("numautorizacao") ||
-        keysNorm.includes("numero_autorizacao") ||
-        keysNorm.includes("ordemautorizacao");
-      const hasExternal =
-        keysNorm.includes("externalid") ||
-        keysNorm.includes("idexterno") ||
-        keysNorm.includes("externoid") ||
-        keysNorm.includes("external_id") ||
-        keysNorm.includes("id");
-      if (!hasNumero || !hasExternal) {
-        alert("Colunas obrigatórias ausentes: numeroAutorizacao e externalId");
+      const hasOrdem = keysNorm.includes("ordemautorizacao");
+      const hasId = keysNorm.includes("id");
+      if (!hasOrdem || !hasId) {
+        alert("Colunas obrigatórias ausentes: Ordem autorização e ID");
         return;
       }
       function pick(r: Record<string, unknown>) {
@@ -70,25 +60,13 @@ export default function SpreadsheetUploader() {
         let e: string | number | null = null;
         for (const [k, v] of Object.entries(r)) {
           const nk = norm(k);
-          if (
-            nk === "numeroautorizacao" ||
-            nk === "numerodaautorizacao" ||
-            nk === "numautorizacao" ||
-            nk === "numero_autorizacao" ||
-            nk === "ordemautorizacao"
-          ) {
+          if (nk === "ordemautorizacao") {
             n =
               typeof v === "string" || typeof v === "number"
                 ? v
                 : String(v ?? "");
           }
-          if (
-            nk === "externalid" ||
-            nk === "idexterno" ||
-            nk === "externoid" ||
-            nk === "external_id" ||
-            nk === "id"
-          ) {
+          if (nk === "id") {
             e =
               typeof v === "string" || typeof v === "number"
                 ? v

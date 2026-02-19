@@ -69,55 +69,71 @@ export async function importSpreadsheet(
   reply: FastifyReply,
 ) {
   const file = await req.file();
+
   if (!file) {
     return reply.code(400).send({ error: "Nenhum arquivo enviado" });
   }
 
-  const filename = file.filename ?? "upload";
-  const ext = filename.split(".").pop()?.toLowerCase();
-  const buf = await file.toBuffer();
+  const filename: string = file.filename ?? "upload";
+  const ext: string | undefined = filename.split(".").pop()?.toLowerCase();
+  const buf: Buffer = await file.toBuffer();
 
-  let rows: Array<Record<string, unknown>> = [];
-  let sheetRef: XLSX.WorkSheet | null = null;
-  let isExcel = false;
+  let rows: Record<string, unknown>[] = [];
+
   if (ext === "csv") {
-    const parsed = Papa.parse(buf.toString("utf-8"), { header: true });
-    if (parsed.errors.length) {
-      return reply
-        .code(400)
-        .send({ error: "CSV inválido", details: parsed.errors });
+    const parsed = Papa.parse<Record<string, unknown>>(buf.toString("utf-8"), {
+      header: true,
+      skipEmptyLines: true,
+    });
+
+    if (parsed.errors.length > 0) {
+      return reply.code(400).send({
+        error: "CSV inválido",
+        details: parsed.errors,
+      });
     }
-    rows = parsed.data as Array<Record<string, unknown>>;
+
+    rows = parsed.data;
   } else if (ext === "xlsx" || ext === "xls") {
     const wb = XLSX.read(buf, { type: "buffer" });
-    const firstSheetName = wb.SheetNames[0];
+    const firstSheetName: string | undefined = wb.SheetNames[0];
+
     if (!firstSheetName) {
       return reply.code(400).send({ error: "Planilha vazia" });
     }
+
     const sheet = wb.Sheets[firstSheetName];
+
     if (!sheet) {
       return reply.code(400).send({ error: "Aba da planilha não encontrada" });
     }
-    rows = XLSX.utils.sheet_to_json(sheet) as Array<Record<string, unknown>>;
-    sheetRef = sheet;
-    isExcel = true;
+
+    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+      defval: "",
+      raw: false,
+    });
   } else {
     return reply.code(400).send({
       error: `Formato não suportado (${ext}). Use .xlsx, .xls ou .csv`,
     });
   }
 
-  req.log.info(
-    { filename, ext, rows_count: rows.length },
-    "importSpreadsheet: file info",
-  );
-  req.log.info(
-    { first_row_keys: rows[0] ? Object.keys(rows[0]).slice(0, 20) : [] },
-    "importSpreadsheet: first row keys",
-  );
+  if (rows.length === 0) {
+    return reply.code(400).send({
+      error: "Planilha sem linhas de dados",
+    });
+  }
 
-  function norm(s: string) {
-    return s
+  const firstRow: Record<string, unknown> | undefined = rows[0];
+
+  if (!firstRow) {
+    return reply.code(400).send({
+      error: "Planilha sem linhas válidas",
+    });
+  }
+
+  function norm(value: string): string {
+    return value
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim()
@@ -125,118 +141,58 @@ export async function importSpreadsheet(
       .replace(/[^a-z0-9]/g, "");
   }
 
-  function remapRow(r: Record<string, unknown>): Record<string, unknown> {
-    const out: Record<string, unknown> = { ...r };
-    for (const k of Object.keys(r)) {
-      const nk = norm(k);
-      if (
-        nk === "numeroautorizacao" ||
-        nk === "numerodaautorizacao" ||
-        nk === "numautorizacao" ||
-        nk === "numero_autorizacao" ||
-        nk === "ordemautorizacao"
-      ) {
-        out["numeroAutorizacao"] = r[k];
-      }
-      if (
-        nk === "externalid" ||
-        nk === "idexterno" ||
-        nk === "externoid" ||
-        nk === "external_id" ||
-        nk === "id"
-      ) {
-        out["externalId"] = r[k];
-      }
-    }
-    return out;
+  const aliasNum: string[] = ["ordemautorizacao"];
+  const aliasExt: string[] = ["id"];
+
+  const firstKeys: string[] = Object.keys(firstRow);
+
+  const numKey: string | null =
+    firstKeys.find((k) => aliasNum.includes(norm(k))) ?? null;
+
+  const extKey: string | null =
+    firstKeys.find((k) => aliasExt.includes(norm(k))) ?? null;
+
+  if (!numKey || !extKey) {
+    return reply.code(400).send({
+      error: "Colunas obrigatórias não encontradas",
+      hint: firstKeys,
+    });
   }
 
-  rows = rows.map(remapRow);
-  req.log.info(
-    {
-      remapped_first_row_keys: rows[0] ? Object.keys(rows[0]).slice(0, 20) : [],
-    },
-    "importSpreadsheet: remapped first row keys",
-  );
-
-  const hasNeededKeys =
-    !!rows[0] && "numeroAutorizacao" in rows[0] && "externalId" in rows[0];
-
-  if (!hasNeededKeys && isExcel && sheetRef) {
-    const raw = XLSX.utils.sheet_to_json(sheetRef, { header: 1 }) as unknown[];
-    const header = (raw[0] ?? []) as unknown[];
-    const headerNorms = (header as unknown[]).map((h) =>
-      typeof h === "string" ? norm(h) : "",
-    );
-    const idxNum = headerNorms.findIndex(
-      (nk) =>
-        nk === "numeroautorizacao" ||
-        nk === "numerodaautorizacao" ||
-        nk === "numautorizacao" ||
-        nk === "numero_autorizacao" ||
-        nk === "ordemautorizacao",
-    );
-    const idxExt = headerNorms.findIndex(
-      (nk) =>
-        nk === "externalid" ||
-        nk === "idexterno" ||
-        nk === "externoid" ||
-        nk === "external_id" ||
-        nk === "id",
-    );
-    req.log.info(
-      { header, headerNorms, idxNum, idxExt },
-      "importSpreadsheet: fallback header analysis",
-    );
-    if (idxNum >= 0 && idxExt >= 0) {
-      const dataRows = (raw.slice(1) as unknown[][]) ?? [];
-      rows = dataRows.map((arr) => {
-        const numeroAutorizacao = String(arr[idxNum] ?? "").trim();
-        const externalId = String(arr[idxExt] ?? "").trim();
-        const out: Record<string, unknown> = {};
-        if (numeroAutorizacao.length > 0)
-          out["numeroAutorizacao"] = numeroAutorizacao;
-        if (externalId.length > 0) out["externalId"] = externalId;
-        return out;
-      });
-      req.log.info(
-        { fallback_rows_count: rows.length },
-        "importSpreadsheet: applied fallback mapping",
-      );
-    }
-  }
+  const normalizedRows: {
+    ordemAutorizacao: unknown;
+    id: unknown;
+  }[] = rows.map((row) => ({
+    ordemAutorizacao: row[numKey],
+    id: row[extKey],
+  }));
 
   const Stringish = z
-    .union([z.string(), z.number()])
+    .union([z.string(), z.number(), z.boolean()])
     .transform((v) => String(v).trim())
     .refine((s) => s.length > 0, { message: "vazio" });
 
-  const RowSchema = z
-    .object({
-      numeroAutorizacao: Stringish,
-      externalId: Stringish,
-    })
-    .passthrough();
+  const RowSchema = z.object({
+    ordemAutorizacao: Stringish,
+    id: Stringish,
+  });
 
-  const data = rows.flatMap((r, i) => {
-    const parsed = RowSchema.safeParse(r);
+  const data = normalizedRows.flatMap((row, index) => {
+    const parsed = RowSchema.safeParse(row);
+
     if (!parsed.success) {
-      if (i < 10) {
-        req.log.info({ i, row: r }, "importSpreadsheet: row invalid");
+      if (index < 10) {
+        req.log.info({ index, row }, "importSpreadsheet: linha inválida");
       }
       return [];
     }
-    const v = parsed.data;
-    if (i < 10) {
-      req.log.info(
-        { i, numeroAutorizacao: v.numeroAutorizacao, externalId: v.externalId },
-        "importSpreadsheet: row valid",
-      );
-    }
+
+    const value = parsed.data;
+
     return [
       {
-        numeroAutorizacao: v.numeroAutorizacao,
-        externalId: v.externalId,
+        numeroAutorizacao: value.ordemAutorizacao,
+        externalId: value.id,
         xml: null,
         xmlEvent: null,
         status: "PENDENTE" as const,
@@ -244,10 +200,9 @@ export async function importSpreadsheet(
     ];
   });
 
-  if (!data.length) {
+  if (data.length === 0) {
     return reply.code(400).send({
       error: "Nenhuma linha válida encontrada",
-      hint: rows[0] ? Object.keys(rows[0]).slice(0, 20) : [],
     });
   }
 
@@ -256,10 +211,18 @@ export async function importSpreadsheet(
       data,
       skipDuplicates: true,
     });
-    return reply.send({ imported: created.count, persisted: true });
-  } catch (e) {
-    req.log.error(e);
-    return reply.send({ imported: data.length, persisted: false });
+
+    return reply.send({
+      imported: created.count,
+      persisted: true,
+    });
+  } catch (error) {
+    req.log.error(error);
+
+    return reply.send({
+      imported: data.length,
+      persisted: false,
+    });
   }
 }
 
