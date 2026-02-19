@@ -44,8 +44,27 @@ export default function SpreadsheetUploader() {
         alert("Formato não suportado. Use .xlsx, .xls ou .csv");
         return;
       }
-      const hasNumero = rows[0] && "numeroAutorizacao" in rows[0];
-      const hasExternal = rows[0] && "externalId" in rows[0];
+      const keys = rows[0] ? Object.keys(rows[0]) : [];
+      const norm = (s: string) =>
+        s
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "");
+      const keysNorm = keys.map(norm);
+      const hasNumero =
+        keysNorm.includes("numeroautorizacao") ||
+        keysNorm.includes("numerodaautorizacao") ||
+        keysNorm.includes("numautorizacao") ||
+        keysNorm.includes("numero_autorizacao") ||
+        keysNorm.includes("ordemautorizacao");
+      const hasExternal =
+        keysNorm.includes("externalid") ||
+        keysNorm.includes("idexterno") ||
+        keysNorm.includes("externoid") ||
+        keysNorm.includes("external_id") ||
+        keysNorm.includes("id");
       if (!hasNumero || !hasExternal) {
         alert("Colunas obrigatórias ausentes: numeroAutorizacao e externalId");
         return;

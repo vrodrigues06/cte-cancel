@@ -133,7 +133,8 @@ export async function importSpreadsheet(
         nk === "numeroautorizacao" ||
         nk === "numerodaautorizacao" ||
         nk === "numautorizacao" ||
-        nk === "numero_autorizacao"
+        nk === "numero_autorizacao" ||
+        nk === "ordemautorizacao"
       ) {
         out["numeroAutorizacao"] = r[k];
       }
@@ -141,7 +142,8 @@ export async function importSpreadsheet(
         nk === "externalid" ||
         nk === "idexterno" ||
         nk === "externoid" ||
-        nk === "external_id"
+        nk === "external_id" ||
+        nk === "id"
       ) {
         out["externalId"] = r[k];
       }
@@ -171,14 +173,16 @@ export async function importSpreadsheet(
         nk === "numeroautorizacao" ||
         nk === "numerodaautorizacao" ||
         nk === "numautorizacao" ||
-        nk === "numero_autorizacao",
+        nk === "numero_autorizacao" ||
+        nk === "ordemautorizacao",
     );
     const idxExt = headerNorms.findIndex(
       (nk) =>
         nk === "externalid" ||
         nk === "idexterno" ||
         nk === "externoid" ||
-        nk === "external_id",
+        nk === "external_id" ||
+        nk === "id",
     );
     req.log.info(
       { header, headerNorms, idxNum, idxExt },
