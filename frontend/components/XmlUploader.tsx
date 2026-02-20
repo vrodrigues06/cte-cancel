@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useDropzone } from "react-dropzone";
 
 const BASE_URL =
   process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
@@ -9,15 +11,32 @@ export default function XmlUploader({
   onUploaded,
 }: {
   id: string;
-  onUploaded: () => void;
+  onUploaded: () => Promise<void>;
 }) {
+  const [fileName, setFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".xml")) {
-      alert("Apenas arquivos .xml são aceitos");
+  const onDrop = (acceptedFiles: File[]) => {
+    const f = acceptedFiles[0];
+    setFileName(f ? f.name : null);
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    multiple: false,
+    accept: {
+      "text/xml": [".xml"],
+      "application/xml": [".xml"],
+    },
+  });
+
+  async function handleUpload() {
+    const input =
+      document.querySelector<HTMLInputElement>('input[type="file"]');
+    const file = input?.files?.[0];
+    if (!file) {
+      alert("Selecione um XML");
       return;
     }
     setLoading(true);
@@ -32,25 +51,37 @@ export default function XmlUploader({
         const txt = await res.text();
         throw new Error(txt);
       }
-      onUploaded();
+      await onUploaded();
+      router.refresh();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Erro no upload de XML";
       alert(message);
     } finally {
       setLoading(false);
-      e.target.value = "";
+      setFileName(null);
     }
   }
 
   return (
-    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 text-sm shadow-sm bg-white">
-      <input
-        type="file"
-        accept=".xml"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-      {loading ? "Enviando..." : "Importar XML"}
-    </label>
+    <div className="flex items-center gap-2">
+      <div
+        {...getRootProps()}
+        className={`cursor-pointer rounded-md border px-2 py-1 text-sm shadow-sm ${
+          isDragActive
+            ? "border-primary bg-blue-50"
+            : "border-gray-300 bg-white"
+        }`}
+      >
+        <input {...getInputProps()} />
+        <span className="text-gray-700">XML</span>
+      </div>
+      <button
+        onClick={handleUpload}
+        disabled={loading || !fileName}
+        className="rounded-md bg-primary px-2 py-1 text-sm text-white disabled:opacity-50"
+      >
+        {loading ? "Importando..." : "Importar"}
+      </button>
+    </div>
   );
 }

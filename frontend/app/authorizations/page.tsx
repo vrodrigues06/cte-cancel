@@ -1,6 +1,7 @@
 import { fetchCtes, fetchStats } from "../../lib/api";
 import CteTable from "../../components/CteTable";
 import SpreadsheetUploader from "../../components/SpreadsheetUploader";
+import XmlBatchUploader from "../../components/XmlBatchUploader";
 
 export default async function AuthorizationsPage({
   searchParams,
@@ -21,10 +22,21 @@ export default async function AuthorizationsPage({
         <h1 className="text-2xl font-semibold text-gray-900">CT-e</h1>
       </div>
       <div className="flex items-center justify-between">
-        <SpreadsheetUploader />
+        <div className="flex items-center gap-4">
+          <SpreadsheetUploader />
+          <XmlBatchUploader enabled={data.total >= 2} />
+        </div>
         <div className="flex gap-2">
-          <SmallStat label="Pendentes" value={stats.pendentes} color="bg-warning" />
-          <SmallStat label="Enviados" value={stats.enviados} color="bg-success" />
+          <SmallStat
+            label="Pendentes"
+            value={stats.pendentes}
+            color="bg-warning"
+          />
+          <SmallStat
+            label="Enviados"
+            value={stats.enviados}
+            color="bg-success"
+          />
           <SmallStat label="Erros" value={stats.erros} color="bg-error" />
         </div>
       </div>
