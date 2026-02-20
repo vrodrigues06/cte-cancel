@@ -15,8 +15,8 @@ await app.register(cors, {
 
 await app.register(multipart, {
   limits: {
-    fileSize: 10 * 1024 * 1024,
-    files: 5,
+    fileSize: 15 * 1024 * 1024,
+    files: 200,
   },
 });
 
@@ -25,7 +25,7 @@ await app.register(ctesRoutes, { prefix: "/api/ctes" });
 app.get("/logs", async () => {
   return { logs: getLogs() };
 });
-const port = Number(process.env["PORT"] ?? 3001);
+const port = Number(process.env["PORT"] ?? 3333);
 try {
   await app.listen({ port, host: "0.0.0.0" });
   app.log.info(`Backend listening on http://localhost:${port}`);

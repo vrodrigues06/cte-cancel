@@ -1,6 +1,7 @@
 import { fetchStats, fetchCtes } from "../lib/api";
 import CteTable from "../components/CteTable";
 import SpreadsheetUploader from "../components/SpreadsheetUploader";
+import XmlBatchUploader from "../components/XmlBatchUploader";
 
 export default async function Page() {
   const stats = await fetchStats();
@@ -12,18 +13,21 @@ export default async function Page() {
       </div>
       <div className="flex items-center justify-between">
         <SpreadsheetUploader />
-        <div className="flex gap-2">
-          <StatCard
-            label="Pendentes"
-            value={stats.pendentes}
-            color="bg-warning"
-          />
-          <StatCard
-            label="Enviados"
-            value={stats.enviados}
-            color="bg-success"
-          />
-          <StatCard label="Erros" value={stats.erros} color="bg-error" />
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-2">
+            <StatCard
+              label="Pendentes"
+              value={stats.pendentes}
+              color="bg-warning"
+            />
+            <StatCard
+              label="Enviados"
+              value={stats.enviados}
+              color="bg-success"
+            />
+            <StatCard label="Erros" value={stats.erros} color="bg-error" />
+          </div>
+          <XmlBatchUploader enabled={data.total >= 2} />
         </div>
       </div>
       <CteTable data={data} />

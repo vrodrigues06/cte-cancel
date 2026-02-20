@@ -8,7 +8,7 @@ import Papa from "papaparse";
 type PreviewRow = { [key: string]: string | number | null };
 
 const BASE_URL =
-  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3333";
 
 export default function SpreadsheetUploader() {
   const [fileName, setFileName] = useState<string | null>(null);

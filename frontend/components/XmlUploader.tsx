@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 
 const BASE_URL =
-  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3333";
 
 export default function XmlUploader({
   id,

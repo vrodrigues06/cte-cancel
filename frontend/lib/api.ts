@@ -19,7 +19,7 @@ export type ListResponse = {
 };
 
 const BASE_URL =
-  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3333";
 
 export async function fetchStats(): Promise<{
   pendentes: number;

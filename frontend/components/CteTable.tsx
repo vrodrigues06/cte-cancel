@@ -7,10 +7,9 @@ import {
   useReactTable,
   flexRender,
 } from "@tanstack/react-table";
-import XmlUploader from "./XmlUploader";
 
 const BASE_URL =
-  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3333";
 
 export default function CteTable({ data }: { data: ListResponse }) {
   const [items, setItems] = useState<Cte[]>(data.items);
@@ -39,7 +38,6 @@ export default function CteTable({ data }: { data: ListResponse }) {
           const disabled = !cte.xml || cte.status !== "PENDENTE";
           return (
             <div className="flex items-center gap-2">
-              <XmlUploader id={cte.id} onUploaded={refresh} />
               <button
                 className="rounded-md bg-primary px-2 py-1 text-sm text-white disabled:opacity-50"
                 disabled={disabled}

@@ -363,17 +363,19 @@ export async function uploadXml(
 }
 
 export async function importXmlBatch(req: FastifyRequest, reply: FastifyReply) {
-  const files = await (req as any).files?.();
-  if (!files || !Array.isArray(files) || files.length === 0) {
-    return reply.code(400).send({ error: "Nenhum arquivo XML enviado" });
-  }
+  const parts = (req as any).files?.();
   const inputs: { filename: string; content: string }[] = [];
-  for (const f of files) {
-    const buf = await f.toBuffer();
-    inputs.push({
-      filename: f.filename ?? "xml",
-      content: buf.toString("utf-8"),
-    });
+  if (parts && typeof parts[Symbol.asyncIterator] === "function") {
+    for await (const f of parts) {
+      const buf = await f.toBuffer();
+      inputs.push({
+        filename: f.filename ?? "xml",
+        content: buf.toString("utf-8"),
+      });
+    }
+  }
+  if (inputs.length === 0) {
+    return reply.code(400).send({ error: "Nenhum arquivo XML enviado" });
   }
   const service = new XmlImportService(prisma);
   const results = await service.importMany(inputs);
