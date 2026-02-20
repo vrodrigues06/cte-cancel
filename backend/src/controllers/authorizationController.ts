@@ -33,6 +33,7 @@ export async function list(
     where.OR = [
       { numeroAutorizacao: { contains: q } },
       { externalId: { contains: q } },
+      { chave: { contains: q } },
     ];
   }
 
@@ -130,11 +131,13 @@ export async function importSpreadsheet(
     const idxExt = headerNorms.findIndex(
       (v) => v === "id" || v === "externalid",
     );
+    const idxChave = headerNorms.findIndex((v) => v === "chave");
     appendLog("import.resolve_indices", {
       header,
       headerNorms,
       idxNum,
       idxExt,
+      idxChave,
     });
     if (idxNum === -1 || idxExt === -1) {
       return reply.code(400).send({
@@ -145,7 +148,8 @@ export async function importSpreadsheet(
     const normalizedRows = dataRows.map((arr) => {
       const ordemAutorizacao = String(arr[idxNum] ?? "").trim();
       const id = String(arr[idxExt] ?? "").trim();
-      return { ordemAutorizacao, id };
+      const chave = idxChave >= 0 ? String(arr[idxChave] ?? "").trim() : "";
+      return { ordemAutorizacao, id, chave };
     });
     appendLog("import.sample_rows", { sample: normalizedRows.slice(0, 5) });
     const Stringish = z
@@ -155,6 +159,7 @@ export async function importSpreadsheet(
     const RowSchema = z.object({
       ordemAutorizacao: Stringish,
       id: Stringish,
+      chave: z.string().optional(),
     });
     const data = normalizedRows.flatMap((row, index) => {
       const parsed = RowSchema.safeParse(row);
@@ -167,6 +172,7 @@ export async function importSpreadsheet(
         {
           numeroAutorizacao: value.ordemAutorizacao,
           externalId: value.id,
+          chave: value.chave && value.chave.length > 0 ? value.chave : null,
           xml: null,
           xmlEvent: null,
           status: "PENDENTE" as const,
@@ -223,6 +229,7 @@ export async function importSpreadsheet(
 
   const aliasNum: string[] = ["ordemautorizacao"];
   const aliasExt: string[] = ["id"];
+  const aliasChave: string[] = ["chave"];
 
   const firstKeys: string[] = Object.keys(firstRow);
 
@@ -244,9 +251,12 @@ export async function importSpreadsheet(
   const normalizedRows: {
     ordemAutorizacao: string;
     id: string;
+    chave?: string;
   }[] = rows.map((row) => {
     const n = row[numKey];
     const i = row[extKey];
+    const cKey = firstKeys.find((k) => aliasChave.includes(norm(k))) ?? null;
+    const c = cKey ? row[cKey] : undefined;
     const ordemAutorizacao =
       typeof n === "string" || typeof n === "number" || typeof n === "boolean"
         ? String(n).trim()
@@ -255,7 +265,11 @@ export async function importSpreadsheet(
       typeof i === "string" || typeof i === "number" || typeof i === "boolean"
         ? String(i).trim()
         : "";
-    return { ordemAutorizacao, id };
+    const chave =
+      typeof c === "string" || typeof c === "number" || typeof c === "boolean"
+        ? String(c).trim()
+        : undefined;
+    return { ordemAutorizacao, id, chave };
   });
 
   appendLog("import.sample_rows", { sample: normalizedRows.slice(0, 5) });
@@ -268,6 +282,7 @@ export async function importSpreadsheet(
   const RowSchema = z.object({
     ordemAutorizacao: Stringish,
     id: Stringish,
+    chave: z.string().optional(),
   });
 
   const data = normalizedRows.flatMap((row, index) => {
@@ -284,6 +299,7 @@ export async function importSpreadsheet(
       {
         numeroAutorizacao: value.ordemAutorizacao,
         externalId: value.id,
+        chave: value.chave && value.chave.length > 0 ? value.chave : null,
         xml: null,
         xmlEvent: null,
         status: "PENDENTE" as const,

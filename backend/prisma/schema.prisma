@@ -11,6 +11,7 @@ model cteCancel {
   id                String    @id @default(uuid())
   numeroAutorizacao String    @map("numero_autorizacao")
   externalId        String    @map("external_id")
+  chave             String?   @map("chave")
   xml               String?
   xmlEvent          String?   @map("xml_event")
   status            Status    @default(PENDENTE)
@@ -22,6 +23,7 @@ model cteCancel {
   @@map("ctes")
   @@index([status])
   @@index([numeroAutorizacao])
+  @@index([chave])
 }
 
 enum Status {
