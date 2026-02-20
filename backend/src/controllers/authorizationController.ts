@@ -4,6 +4,7 @@ import { XMLParser } from "fast-xml-parser";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { SapService } from "../services/SapService";
+import { XmlImportService } from "../services/XmlImportService";
 import { z } from "zod";
 import { appendLog } from "../logs";
 
@@ -359,6 +360,25 @@ export async function uploadXml(
     data: { xml: xmlStr },
   });
   return reply.send(updated);
+}
+
+export async function importXmlBatch(req: FastifyRequest, reply: FastifyReply) {
+  const files = await (req as any).files?.();
+  if (!files || !Array.isArray(files) || files.length === 0) {
+    return reply.code(400).send({ error: "Nenhum arquivo XML enviado" });
+  }
+  const inputs: { filename: string; content: string }[] = [];
+  for (const f of files) {
+    const buf = await f.toBuffer();
+    inputs.push({
+      filename: f.filename ?? "xml",
+      content: buf.toString("utf-8"),
+    });
+  }
+  const service = new XmlImportService(prisma);
+  const results = await service.importMany(inputs);
+  const updated = results.reduce((sum, r) => sum + r.updated, 0);
+  return reply.send({ updated, results });
 }
 
 export async function sendToSap(
