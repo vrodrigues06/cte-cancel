@@ -3,9 +3,16 @@ import CteTable from "../components/CteTable";
 import SpreadsheetUploader from "../components/SpreadsheetUploader";
 import XmlBatchUploader from "../components/XmlBatchUploader";
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<{ offset?: string; limit?: string }>;
+}) {
+  const params = await searchParams;
   const stats = await fetchStats();
-  const data = await fetchCtes({ offset: 0, limit: 50 });
+  const offset = Number(params?.offset ?? 0) || 0;
+  const limit = Number(params?.limit ?? 50) || 50;
+  const data = await fetchCtes({ offset, limit });
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

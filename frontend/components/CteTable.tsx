@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Cte, ListResponse } from "../lib/api";
 import {
   ColumnDef,
@@ -13,6 +14,7 @@ const BASE_URL =
 
 export default function CteTable({ data }: { data: ListResponse }) {
   const [items, setItems] = useState<Cte[]>(data.items);
+  const router = useRouter();
   const columns = useMemo<ColumnDef<Cte>[]>(
     () => [
       { header: "Número de CT-e", accessorKey: "numeroAutorizacao" },
@@ -64,6 +66,10 @@ export default function CteTable({ data }: { data: ListResponse }) {
     getCoreRowModel: getCoreRowModel(),
   });
 
+  useEffect(() => {
+    setItems(data.items);
+  }, [data.items, data.skip, data.take]);
+
   async function refresh() {
     const res = await fetch(
       `${BASE_URL}/api/ctes?offset=${data.skip}&limit=${data.take}`,
@@ -84,6 +90,17 @@ export default function CteTable({ data }: { data: ListResponse }) {
       alert(txt);
     }
     await refresh();
+  }
+
+  const canPrev = data.skip > 0;
+  const canNext = data.skip + data.take < data.total;
+  function goPrev() {
+    const newOffset = Math.max(0, data.skip - data.take);
+    router.push(`/?offset=${newOffset}&limit=${data.take}`);
+  }
+  function goNext() {
+    const newOffset = data.skip + data.take;
+    router.push(`/?offset=${newOffset}&limit=${data.take}`);
   }
 
   return (
@@ -121,7 +138,23 @@ export default function CteTable({ data }: { data: ListResponse }) {
       </table>
       <div className="flex items-center justify-between p-2 text-sm text-gray-600">
         <span>Total: {data.total}</span>
-        <span>Página: {Math.floor(data.skip / data.take) + 1}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={goPrev}
+            disabled={!canPrev}
+            className="rounded-md border bg-white px-2 py-1 text-sm disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <span>Página: {Math.floor(data.skip / data.take) + 1}</span>
+          <button
+            onClick={goNext}
+            disabled={!canNext}
+            className="rounded-md border bg-white px-2 py-1 text-sm disabled:opacity-50"
+          >
+            Próxima
+          </button>
+        </div>
       </div>
     </div>
   );
